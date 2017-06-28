@@ -122,9 +122,9 @@ unsigned int ADCRead(unsigned char ch)
 
 void Serial_Init(void)
 {
-      SPBRG = 129;                        // 9600 baud @ 4MHz
-      TXSTA = 0x26;                    // setup USART transmit
-      RCSTA = 0x90;                    // setup USART receive
+      SPBRG = 129;          // 9600 baud @ 20MHz
+      TXSTA = 0x26;         // setup USART transmit
+      RCSTA = 0x90;         // setup USART receive
 }
 
 unsigned char Init_DS18B20(void)
@@ -205,11 +205,16 @@ void WriteOneChar(unsigned char dat)
 void  ReadTemperature(void)
 {
     Init_DS18B20();
-    WriteOneChar(0xCC); // Skip read serial number column number of operations
-    WriteOneChar(0x44); // Start temperature conversion
+	/* Skip read serial number column number of operations */
+    WriteOneChar(0xCC); 
+	/* Start temperature conversion */
+    WriteOneChar(0x44); 
 	Init_DS18B20();
-    WriteOneChar(0xCC); //Skip read serial number column number of operations
-    WriteOneChar(0xBE); //Read the temperature register, etc. (a total of 9 registers readable) is the temperature of the first two
+	/* Skip read serial number column number of operations */
+    WriteOneChar(0xCC); 
+	/*Read the temperature register, etc. (a total of 9 registers 
+	readable) is the temperature of the first two */
+    WriteOneChar(0xBE); 
     readdata[0]=ReadOneChar();
     readdata[1]=ReadOneChar();
    
