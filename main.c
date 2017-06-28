@@ -2,6 +2,7 @@
 #include <stdio.h> 
 #include <string.h> 
 #include <stdlib.h> 
+#include <xc.h> 
 #include"usart.h"
 #include"LCD.h"
 
@@ -16,52 +17,95 @@
 #pragma config STVREN = OFF
 #pragma config LVP = OFF
 
+#define _XTAL_FREQ 20000000
 #define OUTPUT_PORT 0x00
 #define INPUT_PORT  0xFF
+#define DQ_DIR TRISDbits.RD6
 #define FAN PORTDbits.RD5
+#define DQ PORTDbits.RD6
+#define LED PORTBbits.RB1
 
-unsigned char String[]="Temperature:    ";
-
+unsigned char Init_DS18B20(void);
+void WriteOneChar(unsigned char dat);
+unsigned char ReadOneChar(void);
+void  ReadTemperature(void);
 unsigned int ADCRead(unsigned char );
-void print_bits(int );
-void Delay_ms(unsigned char );
 void Serial_Init(void);
-int Dig;
+void Delay_ms(unsigned int time);
 
-void main()
+unsigned char readdata[2];
+
+int main(void)
 {
-        unsigned char *p, temp[10], i;
+    static unsigned char String[]="Temperature:    ";
+    static unsigned char String1[]="Sensor Connected";
+    static unsigned char String2[]="Sensor Failed";
+
+    unsigned char temp[10];
+    unsigned int TEMPERATURE =0;   
+    
 		TRISD = OUTPUT_PORT;
-        TRISB = OUTPUT_PORT;
+        TRISB = INPUT_PORT & 0xF0 ;
         TRISC = OUTPUT_PORT;
 		ADCON1 = 0x8E;
 		ADCON2 = 0x8A;
+        FAN = 0;
+        Init_DS18B20();        
 		Serial_Init();
-		putrsUSART(" \n\r Temperature monitoring  \n\r ");
+        putrsUSART("Temperature monitoring \n\r ");
         LCD_Initialization();
+        if(Init_DS18B20())
+        {            	
+            putrsUSART(" Sensor connection failed \n\r ");
+            LCD_String(&String2);
+            Delay_ms(2000);	
+        }
+        else
+        {            	
+            putrsUSART(" Sensor connected \n\r ");
+            LCD_String(&String1);
+            Delay_ms(2000);	
+        }        
 		while(1)
-        {       
-            while(String[i]!='\0')
+        {   
+            if(Init_DS18B20())
             {
-               LCD_send_char(String[i]);
-               i++;               
-            }
-		    Dig = ADCRead(0);
-			sprintf(temp,"%d", Dig);
-		    putsUSART(temp);
-			String[12]=temp[0];
-			String[13]=temp[1];
-			String[14]=temp[2];
-            if(Dig>25)
-                FAN = 1;
-            else
+                LCD_String(&String2);
+                Delay_ms(2000);		
+                putrsUSART(" Sensor connection failed \n\r ");
                 FAN = 0;
-			putrsUSART(" \n\r");
-            LCD_SetPosition(12);
-			Delay_ms(100);						
-			//LCD_send_cmd(CLEAR_DISPLAY);            
-            i = 12;			
-		}
+            }
+            else
+            {
+                LCD_String(&String);                 
+                ReadTemperature();
+                TEMPERATURE = 0;
+                TEMPERATURE |=readdata[0];
+                TEMPERATURE |=(readdata[1] << 8);
+                TEMPERATURE = TEMPERATURE*0.0625;
+                sprintf(temp,"%d", TEMPERATURE);
+                putsUSART(temp);
+                putrsUSART("\n\r ");
+                String[12]=temp[0];
+                String[13]=temp[1];
+                String[14]=temp[2];
+                if(TEMPERATURE > 45)
+                    FAN = 1;
+                else
+                    FAN = 0;                  
+                Delay_ms(1000);	                
+            }  
+        }
+        return 0;
+}
+
+void Delay_ms(unsigned int time)
+{
+    unsigned int i;
+    for(i = 0; i < time; i++)
+    {
+        __delay_ms(1);
+    }
 }
 
 unsigned int ADCRead(unsigned char ch)
@@ -78,16 +122,95 @@ unsigned int ADCRead(unsigned char ch)
 
 void Serial_Init(void)
 {
-      SPBRG = 25;                        // 19200 baud @ 20MHz
+      SPBRG = 129;                        // 9600 baud @ 4MHz
       TXSTA = 0x26;                    // setup USART transmit
       RCSTA = 0x90;                    // setup USART receive
 }
 
-void Delay_ms(unsigned char time)
+unsigned char Init_DS18B20(void)
 {
-        unsigned char i,j;
-        for(i=0;i<time;i++)
-       {
-               for(j=0;j<200;j++);
-       }
-} 
+    unsigned char status = 1; 
+    DQ_DIR = 0;	
+    DQ = 0;
+    __delay_us(500);
+    DQ = 1;
+    DQ_DIR = 1;
+    __delay_us(100);
+    status = DQ;
+    __delay_us(400);
+    
+    return status;    
+}
+
+
+unsigned char ReadOneChar(void)
+{
+    unsigned char i=0;
+    unsigned char dat = 0;
+    
+	DQ_DIR = 1;
+    //putrsUSART("Read:");
+    for (i=0;i < 8; i++)
+    {
+	  DQ_DIR = 0;
+      DQ = 0; // To the pulse signal
+	  __delay_us(4);
+	  DQ_DIR = 1;
+	  __delay_us(10);
+	  if(DQ != 0 )
+	  {
+		  dat |= 1 << i;
+          //putrsUSART("1");
+	  }
+      else
+      {
+          //putrsUSART("0");
+      }
+	  __delay_us(44);
+        
+    }
+    //putrsUSART("\n\r");
+    return(dat);
+}
+
+void WriteOneChar(unsigned char dat)
+{
+    unsigned char i;
+    DQ_DIR = 1;      
+    for (i=0; i < 8; i++)
+    {
+		if((dat>>i)&0x01)
+		{  
+			DQ_DIR = 0;
+			DQ =0;
+			__delay_us(15);
+			DQ_DIR = 1;
+			__delay_us(45);
+           
+		}
+		else
+		{
+			DQ_DIR = 0;
+			DQ = 0;
+			__delay_us(60); 
+			DQ_DIR = 1;
+            
+		}
+		__delay_us(2);       
+    }
+    
+}
+ 
+//Read temperature
+void  ReadTemperature(void)
+{
+    Init_DS18B20();
+    WriteOneChar(0xCC); // Skip read serial number column number of operations
+    WriteOneChar(0x44); // Start temperature conversion
+	Init_DS18B20();
+    WriteOneChar(0xCC); //Skip read serial number column number of operations
+    WriteOneChar(0xBE); //Read the temperature register, etc. (a total of 9 registers readable) is the temperature of the first two
+    readdata[0]=ReadOneChar();
+    readdata[1]=ReadOneChar();
+   
+}

@@ -2,6 +2,19 @@
 #include "LCD.h"
 
 
+void LCD_String(char *data)
+{
+    LCD_send_cmd ( CLEAR_DISPLAY );
+    LCD_send_cmd ( RETURN_HOME );
+    LCD_send_cmd ( DISP_ON_CURSOR_OFF );  
+    LCD_send_cmd ( CURSOR_1ST_LINE );
+    LCD_send_cmd ( INC_CURSOR );  
+	while(*data!='\0')
+    {
+       LCD_send_char(*data);
+       data++;               
+    }
+}
 void LCD_Initialization( void ) 
  {
 		LCD_delay (); /* wait enough time after Vdd rise */

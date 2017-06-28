@@ -46,5 +46,5 @@ void LCD_delay(void);
 void Nibble_MSB (unsigned char c);
 void Nibble_LSB(unsigned char c);
 void LCD_send_char ( unsigned char c );
-
+void LCD_String(char *data);
 #endif
